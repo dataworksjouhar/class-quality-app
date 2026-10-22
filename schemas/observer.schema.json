@@ -1,0 +1,324 @@
+{
+  "type": "object",
+  "properties": {
+    "roster": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "T, T2, S1.., P1.., V, U1.."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "teacher",
+              "child",
+              "adult",
+              "media",
+              "unsure"
+            ]
+          },
+          "name_heard": {
+            "type": "string",
+            "description": "Name the teacher used for this person, or empty. Internal only; removed by code."
+          },
+          "voice_note": {
+            "type": "string",
+            "description": "A few words to tell voices apart, no names, no appearance."
+          },
+          "unsure_reason": {
+            "type": "string",
+            "description": "Why role is unsure, or empty."
+          },
+          "first_heard": {
+            "type": "string",
+            "description": "MM:SS clip time"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "name_heard",
+          "voice_note",
+          "unsure_reason",
+          "first_heard"
+        ]
+      }
+    },
+    "student_turns": {
+      "type": "array",
+      "description": "Every turn by anyone other than the teacher or media, in time order.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string",
+            "description": "MM:SS clip time the turn starts"
+          },
+          "speaker": {
+            "type": "string",
+            "description": "Roster ID: S#, P# or U#"
+          }
+        },
+        "required": [
+          "t",
+          "speaker"
+        ]
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "e1, e2, … within this clip"
+          },
+          "t": {
+            "type": "string",
+            "description": "MM:SS clip time"
+          },
+          "t_end": {
+            "type": "string",
+            "description": "MM:SS clip time, or empty"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "greeting",
+              "check_in",
+              "topic_stated",
+              "previous_class_link",
+              "new_joiner_present",
+              "new_joiner_intro_invited",
+              "recap",
+              "homework_assigned",
+              "goodbye",
+              "question_directed",
+              "question_whole_class",
+              "student_utterance",
+              "teacher_answers_own_question",
+              "redirect_to_student",
+              "parent_prompt",
+              "feedback_specific",
+              "feedback_generic",
+              "encouragement",
+              "celebration",
+              "humour",
+              "patience_after_error",
+              "impatience",
+              "response_to_student_comment",
+              "explanation",
+              "teacher_demo",
+              "puzzle_start",
+              "student_move",
+              "puzzle_solved_by_student",
+              "teacher_parent_exchange",
+              "language_switch",
+              "media_playing",
+              "technical_issue",
+              "admin",
+              "dead_air",
+              "instruction_text_seen"
+            ]
+          },
+          "subtype": {
+            "type": "string",
+            "enum": [
+              "",
+              "open",
+              "closed",
+              "answer",
+              "question",
+              "comment",
+              "move_call"
+            ]
+          },
+          "speaker": {
+            "type": "string",
+            "description": "Roster ID, or empty for non-speech events"
+          },
+          "target": {
+            "type": "string",
+            "description": "Roster ID addressed, or empty"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ml",
+              "ta",
+              "hi",
+              "mixed",
+              "other",
+              "none"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "description": "At most 25 words, English, no names"
+          },
+          "quote_en": {
+            "type": "string",
+            "description": "At most 15 words, translated to English, no names, or empty"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "t",
+          "t_end",
+          "type",
+          "subtype",
+          "speaker",
+          "target",
+          "lang",
+          "detail",
+          "quote_en",
+          "confidence"
+        ]
+      }
+    },
+    "minute_grid": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "minute": {
+            "type": "integer",
+            "description": "0-based minute of the clip"
+          },
+          "audio": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "degraded",
+              "unusable"
+            ]
+          },
+          "affected": {
+            "type": "string",
+            "enum": [
+              "teacher",
+              "students",
+              "all",
+              "none"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "opening",
+              "instruction",
+              "practice",
+              "review",
+              "closing",
+              "admin",
+              "media",
+              "technical",
+              "dead_air",
+              "break"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "description": "Dominant language code(s), e.g. en, ml, en+ta"
+          },
+          "language_uncertain": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "minute",
+          "audio",
+          "affected",
+          "reason",
+          "phase",
+          "language",
+          "language_uncertain"
+        ]
+      }
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string",
+            "description": "MM:SS clip time, as labelled"
+          },
+          "teacher_tile_visible": {
+            "type": "boolean"
+          },
+          "camera_on": {
+            "type": "boolean"
+          },
+          "face_visible": {
+            "type": "boolean"
+          },
+          "background": {
+            "type": "string",
+            "enum": [
+              "8x8_branded",
+              "other_virtual",
+              "real_room",
+              "unknown"
+            ]
+          },
+          "lighting": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "dim",
+              "unknown"
+            ]
+          },
+          "artefacts": {
+            "type": "boolean"
+          },
+          "screen_content": {
+            "type": "string",
+            "enum": [
+              "chessboard",
+              "slides",
+              "video",
+              "none",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "t",
+          "teacher_tile_visible",
+          "camera_on",
+          "face_visible",
+          "background",
+          "lighting",
+          "artefacts",
+          "screen_content"
+        ]
+      }
+    }
+  },
+  "required": [
+    "roster",
+    "student_turns",
+    "events",
+    "minute_grid",
+    "frames"
+  ]
+}
