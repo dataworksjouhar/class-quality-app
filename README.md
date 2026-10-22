@@ -3,7 +3,7 @@
 Takes a recording of an online children's class and returns a label (Poor / Average / Good / Excellent),
 timestamped evidence, and the minutes a QA reviewer should watch first.
 
-**Status: full pipeline works end to end.** Tested on one labelled class so far (B558, 46 min: 4-5 min, about $0.30).
+**Status: full pipeline works end to end; evaluated on all 12 recordings (below).** A 46-minute class takes 4-5 min and about $0.30.
 See `CLAUDE.md` for the plan and `DECISIONS.md` for every change to it.
 
 ## Run locally
@@ -53,10 +53,37 @@ with timestamps. Reported separately from teaching quality; absent audio also co
 
 Tests: `python -m pytest tests` (label rule against the rubric's sanity table, area F, Judge checks, redaction).
 
+## Evaluation (12 recordings, prompts frozen: Observer v0.3, Judge v0.1)
+
+| code | organiser | app | M | A | B | C | D | E | F | confidence | min | time | cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| B472 | Excellent | Good | 2.78 | 3 | 2 | 3 | 3 | 3 | 3 | Medium | 56 | 18:25 | $0.39 |
+| B491 | Excellent | Good | 3.00 | 3 | 3 | 3 | 2 | 4 | 3 | High | 54 | 47:05 | $0.45 |
+| B435-Jul | Good | Average | 2.67 | 4 | 3 | 2 | 2 | 3 | 1 | Low | 44 | 7:49 | $0.28 |
+| B552 | Good | Good | 3.11 | 3 | 3 | 3 | 4 | 3 | 3 | Medium | 46 | 6:49 | $0.35 |
+| B435-Aug | Average | Average | 2.78 | 3 | 3 | 3 | 3 | 3 | 1 | Medium | 38 | 6:06 | $0.27 |
+| B516 | Average | Good | 2.78 | 2 | 3 | 3 | 3 | 3 | 3 | Medium | 44 | 6:28 | $0.34 |
+| B482 | Poor (Weak) | Average | 2.44 | 3 | 2 | 2 | 2 | 3 | 3 | High | 59 | 15:38 | $0.38 |
+| B558 | Poor (Weak) | Good | 2.78 | 3 | 3 | 3 | 2 | 3 | 2 | Medium | 46 | 5:35 | $0.30 |
+| B392 | (quality issue) | Good | 2.89 | 3 | 3 | 3 | 2 | 4 | 2 | Medium | 60 | 16:19 | $0.48 |
+| B441 | (quality issue) | Average | 2.67 | 3 | 3 | 3 | 2 | 3 | 1 | Medium | 89 | 17:58 | $0.57 |
+| EN-demo | (demo) | Good | 3.00 | 3 | 3 | 3 | 2 | 4 | 3 | High | 44 | 9:02 | $0.40 |
+| ML-demo | (demo) | Good | 3.11 | 4 | 3 | 3 | 3 | 3 | 2 | Medium | 52 | 6:36 | $0.40 |
+
+`*` = low evidence. Time is wall time per recording, mostly with 3 running at once on one laptop (B491 and B472 include hung API calls before the 240 s timeout, D21).
+
+Labelled recordings: **2 of 8 exact, 7 of 8 within one level.** No recording was labelled Excellent or Poor:
+the scale is compressed toward the middle (see tuning notes T1-T4 in DECISIONS.md). The quality flag fires on
+B441 but not on B392. The English and Malayalam demos get the same label (Good, M 3.00 and 3.11).
+B558 gave the same result in three separate runs. Total cost $4.61. **Twelve samples prove little**, and the
+rubric anchors were written from feedback on these same recordings, so these numbers are optimistic.
+
 ## Data handling
 
 - No recordings, transcripts or outputs in the repo (`.gitignore` covers media, VTT, `data/`, `.env`).
 - Each run works in its own temp folder, which is deleted when the run ends.
+- The finished report (JSON only: no audio, stills, logs or names) is kept in the server's temp folder for 24 hours
+  under a random run ID in the page URL, so a reload brings it back. Then it is deleted.
 - gdown runs with `--no-cookies`, so downloads never use anyone's Google account.
 
 ## Recording-quality check: what it catches (E5, 12 recordings)

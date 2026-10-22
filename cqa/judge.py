@@ -90,11 +90,13 @@ def _ok(d: dict | None) -> bool:
 def run(judge_input: dict, duration_s: float, thinking_level: str = "high") -> tuple[dict, dict]:
     """judge.md §4 check 6: retry once on invalid JSON or a missing area, then fail."""
     parts = [gemini.text(json.dumps(judge_input, ensure_ascii=False))]
-    stats = {"seconds": 0.0, "cost_usd": 0.0, "input_tokens": 0, "output_tokens": 0, "thought_tokens": 0, "attempts": 0}
+    stats = {"seconds": 0.0, "cost_usd": 0.0, "input_tokens": 0, "output_tokens": 0, "thought_tokens": 0, "attempts": 0,
+             "api_errors": 0}
     for _ in range(2):
         r = gemini.interact(system_prompt(), parts, schema(), thinking_level=thinking_level)
         for k, v in (("seconds", r.seconds), ("cost_usd", r.cost_usd), ("input_tokens", r.input_tokens),
-                     ("output_tokens", r.output_tokens), ("thought_tokens", r.thought_tokens), ("attempts", r.attempts)):
+                     ("output_tokens", r.output_tokens), ("thought_tokens", r.thought_tokens), ("attempts", r.attempts),
+                     ("api_errors", r.api_errors)):
             stats[k] += v
         if _ok(r.data):
             return check(r.data, judge_input, duration_s, stats), stats

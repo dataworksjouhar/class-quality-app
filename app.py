@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
-from cqa import devlocal, intake, pipeline, quality
+from cqa import devlocal, intake, pipeline, quality, store
 
 load_dotenv()
 st.set_page_config(page_title="Class Quality Assessor", page_icon="♟️", layout="centered")
@@ -88,16 +88,15 @@ def run() -> dict:
         shutil.rmtree(job, ignore_errors=True)
 
 
-def export(r: dict) -> dict:
-    return {k: v for k, v in r.items() if k != "quality"} | {"recording_quality": r["quality"].metrics}
-
-
 if go:
     try:
-        st.session_state["report"] = run()
-        if devlocal.enabled():  # dev only: keep the (leak-tested, name-free) report so a reload cannot lose it
+        report = run()
+        # keep the redacted report under a run ID in the URL, so a reload (e.g. on a phone) brings it back (D20)
+        st.session_state["report"] = report
+        st.query_params["run"] = store.save(report)
+        if devlocal.enabled():  # dev only: also keep a copy for the evaluation
             out = devlocal.report_dir() / f"{(dev_code or 'run').strip()}_{time.strftime('%Y%m%d-%H%M%S')}.json"
-            out.write_text(json.dumps(export(st.session_state["report"]), indent=1, default=str), encoding="utf-8")
+            out.write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
     except (intake.IntakeError, pipeline.PrivacyCheckFailed, FileNotFoundError) as e:
         st.session_state.pop("report", None)
         st.error(str(e))
@@ -107,20 +106,20 @@ if go:
 
 
 # ------------------------------------------------------------------ report
-def quality_panel(rep: quality.QualityReport) -> None:
-    m = rep.metrics
-    st.subheader(f"Recording quality: {'OK' if rep.ok else 'Issues'}")
+def quality_panel(rep: dict) -> None:
+    m = rep["metrics"]
+    st.subheader(f"Recording quality: {'OK' if rep['ok'] else 'Issues'}")
     st.caption("Measured from the audio only (no AI). Reported separately from teaching quality.")
     c = st.columns(4)
     c[0].metric("Length", f"{m['duration_min']:.0f} min")
     c[1].metric("Loudness", "-" if m["integrated_lufs"] is None else f"{m['integrated_lufs']:.1f} LUFS")
     c[2].metric("Clipped", f"{m['clipped_seconds']} s")
     c[3].metric("Silent gaps", f"{m['silent_gaps_per_hour']:.0f} / hour")
-    for f in rep.findings:
-        spans = ", ".join(f"{quality.ts(s)} ({int(e - s)} s)" for s, e in f.spans)
-        st.markdown(f"{'⚠️' if f.is_issue else '✅'} **{f.check.capitalize()}**: {f.message}"
+    for f in rep["findings"]:
+        spans = ", ".join(f"{quality.ts(s)} ({int(e - s)} s)" for s, e in f["spans"])
+        st.markdown(f"{'⚠️' if f['is_issue'] else '✅'} **{f['check'].capitalize()}**: {f['message']}"
                     + (f"  \n  At: {spans}" if spans else ""))
-    chart = pd.DataFrame({"level (dBFS)": rep.minute_db}, index=pd.Index(range(len(rep.minute_db)), name="minute"))
+    chart = pd.DataFrame({"level (dBFS)": rep["minute_db"]}, index=pd.Index(range(len(rep["minute_db"])), name="minute"))
     st.line_chart(chart, height=160)
 
 
@@ -141,6 +140,9 @@ def report_view(r: dict) -> None:
     if r["needs_human_review"]:
         st.warning("Needs human review: the inputs are too weak for a confident grade.")
     st.markdown(f"**{r['summary']}**")
+    st.download_button("Download report (JSON)", json.dumps(r, indent=1, default=str), "class_report.json",
+                       "application/json", key="download_top")
+    st.caption("This page's link brings the report back for 24 hours. The report holds no names, audio or video.")
 
     st.markdown("#### Watch these minutes first")
     for w in r["watch"]:
@@ -185,9 +187,12 @@ def report_view(r: dict) -> None:
                  f"Cost ${run_['total_cost_usd']:.2f}. Time {run_['timings_s']}. Name leak test: {run_['leak_test']}. "
                  f"Judge citations removed by checks: {run_['judge_checks_removed'] or 'none'}.")
         st.json({"judge_metrics": r["judge_metrics"], "all_metrics": r["metrics"]}, expanded=False)
-    st.download_button("Download report (JSON)", json.dumps(export(r), indent=1, default=str), "class_report.json",
-                       "application/json")
 
 
+
+if not st.session_state.get("report") and (run_id := st.query_params.get("run")):
+    st.session_state["report"] = store.load(run_id)
+    if st.session_state["report"] is None:
+        st.info("That report has expired or does not exist. Reports are kept for 24 hours.")
 if st.session_state.get("report"):
     report_view(st.session_state["report"])

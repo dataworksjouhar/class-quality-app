@@ -126,9 +126,10 @@ def observe(audio_path: Path, ch: Chunk, frames: list[tuple[float, Path]] | None
     return gemini.interact(system_prompt(), build_parts(audio_path, ch, frames), schema(), thinking_level=thinking_level)
 
 
-def redact(log: dict, vtt_labels=()) -> dict:
-    """Merge rule 4 (D16): replace heard names and VTT labels in every text field. Returns counts only."""
-    return dict(privacy.redact(log, vtt_labels))
+def redact(log: dict, vtt_labels=(), other_heard=()) -> dict:
+    """Merge rule 4 (D16, D22): replace heard names (this chunk's and other chunks') and VTT labels in every text
+    field. Returns counts only."""
+    return dict(privacy.redact(log, vtt_labels, other_heard))
 
 
 def validate(log: dict, ch: Chunk) -> dict:

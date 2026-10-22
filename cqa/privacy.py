@@ -43,14 +43,14 @@ def tokens(names, stoplist: bool = True) -> set[str]:
     return out
 
 
-def _match(word: str, table: dict[str, str]) -> tuple[str | None, str]:
+def _match(word: str, table: dict[str, str], fuzzy: bool = True) -> tuple[str | None, str]:
     """Replacement for one word, and how it matched ('exact', 'fuzzy' or '')."""
     if len(word) < 3:
         return None, ""
     n = norm(word)
     if n in table:  # someone is called this, even if it is also a chess word
         return table[n], "exact"
-    if word.lower() in NOT_NAMES or word.lower() in CHESS_WORDS:
+    if not fuzzy or word.lower() in NOT_NAMES or word.lower() in CHESS_WORDS:
         return None, ""
     if len(n) >= FUZZY_MIN_LEN:
         for t, rep in table.items():
@@ -59,9 +59,11 @@ def _match(word: str, table: dict[str, str]) -> tuple[str | None, str]:
     return None, ""
 
 
-def name_table(roster: list[dict], vtt_labels=()) -> dict[str, str]:
-    """normalised name token -> replacement. A heard name maps to its roster ID; a VTT-only name to [name]."""
+def name_table(roster: list[dict], vtt_labels=(), other_heard=()) -> dict[str, str]:
+    """normalised name token -> replacement. A heard name maps to its roster ID; a VTT-only name, or a name heard
+    in another chunk (D22), to [name]."""
     table = {t: "[name]" for t in tokens(vtt_labels)}
+    table |= {t: "[name]" for t in tokens(other_heard, stoplist=False)}
     for r in roster:
         for t in tokens([r.get("name_heard", "")], stoplist=False):
             table[t] = f"[{r['id']}]"
@@ -76,9 +78,9 @@ def _fields(log: dict):
                     yield f"{section}.{k}", item, k
 
 
-def redact(log: dict, vtt_labels=()) -> Counter:
+def redact(log: dict, vtt_labels=(), other_heard=()) -> Counter:
     """Replace names in place in every text field except roster.name_heard. Returns counts per field and match type."""
-    table = name_table(log.get("roster", []), vtt_labels)
+    table = name_table(log.get("roster", []), vtt_labels, other_heard)
     counts: Counter = Counter()
 
     for where, item, k in _fields(log):
@@ -93,15 +95,16 @@ def redact(log: dict, vtt_labels=()) -> Counter:
     return counts
 
 
-def leak_test(log: dict, heard=(), vtt_labels=()) -> Counter:
-    """Count remaining name hits: the redaction matcher, plus a substring scan for names of 5+ letters."""
+def leak_test(log: dict, heard=(), vtt_labels=(), fuzzy: bool = True) -> Counter:
+    """Count remaining name hits: the redaction matcher, plus a substring scan for names of 5+ letters.
+    fuzzy=False for text the Judge wrote: it never sees names, so a fuzzy hit there is a letter accident (D22)."""
     table = {t: "x" for t in tokens(vtt_labels) | tokens(heard, stoplist=False)}
     long_names = [t for t in table if len(t) >= FUZZY_MIN_LEN]
     hits: Counter = Counter()
     for where, item, k in _fields(log):
         text = item[k]
         for w in WORD.findall(text):
-            _, how = _match(w, table)
+            _, how = _match(w, table, fuzzy)
             if how:
                 hits[f"{where}:{how}"] += 1
         # names glued inside one word ("AadhiKumar"); never across words, which only finds letter accidents
@@ -114,7 +117,31 @@ def heard_names(log: dict) -> list[str]:
     return [r["name_heard"] for r in log.get("roster", []) if r.get("name_heard", "").strip()]
 
 
-def leak_test_text(text: str, heard=(), vtt_labels=()) -> int:
+def leak_test_text(text: str, heard=(), vtt_labels=(), fuzzy: bool = True) -> int:
     """Name hits in any text (the Judge input, the report): same matcher plus the substring scan."""
     log = {"events": [{"detail": text, "quote_en": ""}]}
-    return sum(leak_test(log, heard, vtt_labels).values())
+    return sum(leak_test(log, heard, vtt_labels, fuzzy).values())
+
+
+def leak_locations(obj, heard=(), vtt_labels=(), fuzzy: bool = True) -> list[dict]:
+    """Where names were found in any JSON-like object: path, match type and source, never the word itself."""
+    heard_t, vtt_t = tokens(heard, stoplist=False), tokens(vtt_labels)
+    table = {t: "x" for t in heard_t | vtt_t}
+    out = []
+
+    def walk(o, path):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                walk(v, f"{path}.{k}")
+        elif isinstance(o, list):
+            for v in o:
+                walk(v, f"{path}[]")
+        elif isinstance(o, str):
+            for w in WORD.findall(o):
+                _, how = _match(w, table, fuzzy)
+                if how:
+                    n = norm(w)
+                    out.append({"path": path, "match": how, "source": "heard" if n in heard_t else "vtt" if n in vtt_t else "fuzzy",
+                                "chess_word": w.lower() in CHESS_WORDS, "capitalised": w[:1].isupper()})
+    walk(obj, "")
+    return out

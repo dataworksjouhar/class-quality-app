@@ -43,6 +43,18 @@ def audio_minutes(m: MergedLog, q: QualityReport | None) -> tuple[set[int], set[
     return unusable, teacher_bad
 
 
+def audio_minute_sources(m: MergedLog, q: QualityReport | None) -> dict:
+    """How many bad-audio minutes each source contributes, to check what drives the gate (counts only)."""
+    out = {"grid_unusable": len({g["minute"] for g in m.grid if g["audio"] == "unusable"}),
+           "grid_teacher_degraded_or_unusable": len({g["minute"] for g in m.grid if g["audio"] in ("degraded", "unusable")
+                                                      and g["affected"] in ("teacher", "all")}),
+           "ffmpeg_absent": 0, "ffmpeg_dense_clip": 0}
+    if q is not None:
+        out["ffmpeg_absent"] = len(_minutes(q.absent_spans))
+        out["ffmpeg_dense_clip"] = len(_minutes(q.dense_clip_spans))
+    return out
+
+
 def compute(m: MergedLog, q: QualityReport | None = None) -> dict:
     ev = m.events
     minutes = max(m.duration_s / 60, 1)
@@ -131,6 +143,7 @@ def compute(m: MergedLog, q: QualityReport | None = None) -> dict:
         "languages": dict(Counter(e["lang"] for e in ev)),
         "minutes_total": n_min,
         "minutes_unusable_audio": len(unusable), "minutes_degraded_teacher_audio": len(degraded),
+        "bad_audio_minutes_by_source": audio_minute_sources(m, q),
         "minutes_language_uncertain": lang_unc,
         "frames_total": len(m.frames), "frames_teacher_visible": len(seen),
         "frames_8x8_background": share(lambda f: f["background"] == "8x8_branded"),

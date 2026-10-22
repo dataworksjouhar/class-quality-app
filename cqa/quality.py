@@ -149,3 +149,10 @@ def assess(scan: AudioScan) -> QualityReport:
     unreliable = merge(clip_spans + gaps + absent_late, gap=5)
     dense = [(m * 60.0, m * 60.0 + 60) for m in np.flatnonzero(minute_clip >= config.CLIP_DENSE_MINUTE)]
     return QualityReport(findings, metrics, minute_db, minute_clip, unreliable, absent_late, dense)
+
+
+def to_dict(q: QualityReport) -> dict:
+    """Plain-JSON form for the report, storage and download."""
+    return {"ok": q.ok, "metrics": q.metrics,
+            "findings": [{"check": f.check, "is_issue": f.is_issue, "message": f.message, "spans": f.spans} for f in q.findings],
+            "minute_db": [round(float(x), 1) for x in q.minute_db]}

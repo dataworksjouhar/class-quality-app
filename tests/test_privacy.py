@@ -62,3 +62,11 @@ def test_substring_scan_stays_inside_words():
     assert privacy.leak_test(log, [], ["Zemblor"]) == {"events.detail:exact": 1}
     glued = make_log(["Praised ZorvelikaQuen for the move"])
     assert privacy.leak_test(glued, [], ["Zorvelika Q"])
+
+
+def test_name_heard_in_another_chunk_is_redacted():
+    # chunk 1 mentions a child whose name only reached the roster in chunk 3 (D22)
+    log = make_log(["Teacher asks Quorvanth to move"])
+    assert not privacy.redact(log)  # this chunk's roster has no such name
+    privacy.redact(log, other_heard=["Quorvanth"])
+    assert texts(log) == ["Teacher asks [name] to move"]

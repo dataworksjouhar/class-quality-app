@@ -22,6 +22,8 @@ SDK_VERSION = "2.32.0"
 PRICE_IN = 0.75
 PRICE_OUT = 3.75
 MAX_INLINE_BYTES = 18 * 1024 * 1024  # keep the whole request under the ~20 MB inline limit
+CALL_TIMEOUT_S = 240  # slowest normal call in the evaluation took ~125 s; some calls hang (D21)
+MAX_API_ERRORS = 2  # per interact(): a hung or failed call is retried once, then the error is raised
 
 if google.genai.__version__ != SDK_VERSION:
     raise RuntimeError(f"google-genai {google.genai.__version__} installed; this wrapper is pinned to {SDK_VERSION}.")
@@ -72,6 +74,7 @@ class Result:
     thought_tokens: int = 0
     input_by_modality: dict = field(default_factory=dict)
     attempts: int = 1
+    api_errors: int = 0
 
     @property
     def cost_usd(self) -> float:
@@ -80,8 +83,9 @@ class Result:
 
 
 def interact(system: str, parts: list[dict], schema: dict, *, thinking_level: str = "medium",
-             max_output_tokens: int = 32768, seed: int | None = None, timeout_s: float = 600) -> Result:
-    """One stateless, structured-output call. Retries once on invalid JSON (observer merge rule 6)."""
+             max_output_tokens: int = 32768, seed: int | None = None, timeout_s: float = CALL_TIMEOUT_S) -> Result:
+    """One stateless, structured-output call. Retries once on invalid JSON (observer merge rule 6) and once on an
+    API error or timeout (D21)."""
     size = sum(len(p.get("data", "")) for p in parts)
     if size > MAX_INLINE_BYTES:
         raise ValueError(f"Inline payload is {size / 1e6:.1f} MB; the limit is {MAX_INLINE_BYTES / 1e6:.0f} MB.")
@@ -89,17 +93,27 @@ def interact(system: str, parts: list[dict], schema: dict, *, thinking_level: st
     if seed is not None:
         gen["seed"] = seed
     total = Result(None, "", "", 0.0, attempts=0)
-    for _ in range(2):
+    parses = 0
+    while parses < 2:
         t0 = time.time()
-        r = client().interactions.create(
-            model=MODEL,
-            store=False,
-            system_instruction=system,
-            input=parts,  # a flat list of content parts is one user turn
-            response_format={"type": "text", "mime_type": "application/json", "schema": schema},
-            generation_config=gen,
-            timeout=timeout_s,
-        )
+        try:
+            r = client().interactions.create(
+                model=MODEL,
+                store=False,
+                system_instruction=system,
+                input=parts,  # a flat list of content parts is one user turn
+                response_format={"type": "text", "mime_type": "application/json", "schema": schema},
+                generation_config=gen,
+                timeout=timeout_s,
+            )
+        except Exception:
+            total.seconds += time.time() - t0
+            total.api_errors += 1
+            if total.api_errors >= MAX_API_ERRORS:
+                raise
+            time.sleep(5)
+            continue
+        parses += 1
         total.seconds += time.time() - t0
         total.attempts += 1
         u = r.usage
