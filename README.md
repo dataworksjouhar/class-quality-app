@@ -12,6 +12,8 @@ Paste a Google Drive link (shared as "Anyone with the link") or upload a small f
 **A run takes 6-8 minutes. Keep the page open; on a phone, keep the screen on.** When it finishes, the report
 has its own link (kept 24 hours) and a "Download report" button.
 
+The hosted app uses a paid API key and will stay live until November 5, 2026.
+
 ## Run locally
 
 ```bash
@@ -145,6 +147,9 @@ recordings, so even these numbers are optimistic. The hidden test recording is t
 
 ## Data handling
 
+- The brief allows only services the organiser permits, especially when children are identifiable. None was named,
+  so I chose the Gemini API on a paid tier with the settings below, to keep exposure as low as possible, and
+  documented the choice here.
 - No recordings, transcripts or outputs in the repo (`.gitignore` covers media, VTT, `data/`, `.env`).
 - Each run works in its own temp folder, which is deleted when the run ends.
 - The finished report (JSON only: no audio, stills, logs or names) is kept in the server's temp folder for 24 hours
@@ -160,3 +165,8 @@ recordings, so even these numbers are optimistic. The hidden test recording is t
 Flags "quality issue-2" (silent gaps: 20 per hour; every other file is at 15 or fewer) and "good-1" (about 10 minutes
 with no audio mid-class). It misses "quality issue-1", whose reported quietness does not show in any loudness
 measure, and it does not detect the voice cracking in quality issue-2 (that is not clipping). Details in DECISIONS.md D12.
+
+## How this was built
+
+Initial planning was done in a separate session; its output is `CLAUDE.md`, which the planning chat and this
+Claude Code session both worked from. Decisions are logged in `DECISIONS.md`.
