@@ -46,8 +46,13 @@ def fmt_bytes(n: int) -> str:
     return f"{n / 1e6:,.0f} MB"
 
 
+RUN_NOTE = "This takes 6-8 minutes. Keep this page open. On a phone, keep the screen on."
+
+
 def run() -> dict:
     job = intake.new_job_dir()
+    note = st.empty()
+    note.info(RUN_NOTE, icon="⏳")
     status = st.status("Working…", expanded=True)
     try:
         with status:
@@ -85,6 +90,7 @@ def run() -> dict:
         status.update(label="Stopped", state="error", expanded=True)
         raise
     finally:
+        note.empty()
         shutil.rmtree(job, ignore_errors=True)
 
 

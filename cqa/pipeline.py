@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -33,7 +34,24 @@ def _cut_audio_copy(audio: Path, ch: observer.Chunk, out: Path) -> Path:
     return out
 
 
+# One still per minute: the first keyframe in each minute, decoding keyframes only (D24). showinfo prints each
+# kept frame's real time, so a still is labelled with when it was taken, not with its minute mark.
+_KEYFRAME_FILTER = ("select='isnan(prev_selected_t)+gte(floor(t/60),floor(prev_selected_t/60)+1)',"
+                    f"showinfo,scale={observer.FRAME_WIDTH}:-2")
+
+
 def _grab_all_frames(src: Path, duration_s: float, out_dir: Path) -> list[tuple[float, Path]]:
+    r = subprocess.run([ffmpeg_exe(), "-hide_banner", "-nostats", "-skip_frame", "nokey", "-i", str(src), "-map", "0:v:0",
+                        "-vf", _KEYFRAME_FILTER, "-fps_mode", "vfr", "-q:v", "5", str(out_dir / "k%05d.jpg")],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    times = [float(x) for x in re.findall(r"n:\s*\d+\s.*?pts_time:([\d.]+)", r.stderr)]
+    files = sorted(out_dir.glob("k*.jpg"))
+    if r.returncode == 0 and files and len(files) == len(times):
+        return list(zip(times, files))
+    return _grab_frames_by_seek(src, duration_s, out_dir)  # fallback: accurate seek at each minute mark
+
+
+def _grab_frames_by_seek(src: Path, duration_s: float, out_dir: Path) -> list[tuple[float, Path]]:
     times = [60.0 * k for k in range(int(math.ceil(duration_s / 60)))]
 
     def grab(t: float) -> tuple[float, Path] | None:

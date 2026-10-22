@@ -6,6 +6,12 @@ timestamped evidence, and the minutes a QA reviewer should watch first.
 **Status: full pipeline works end to end; evaluated on all 12 recordings (below).** A 46-minute class takes 4-5 min and about $0.30.
 See `CLAUDE.md` for the plan and `DECISIONS.md` for every change to it.
 
+## Using the app
+
+Paste a Google Drive link (shared as "Anyone with the link") or upload a small file, then press **Analyse**.
+**A run takes 6-8 minutes. Keep the page open; on a phone, keep the screen on.** When it finishes, the report
+has its own link (kept 24 hours) and a "Download report" button.
+
 ## Run locally
 
 ```bash
@@ -35,7 +41,8 @@ Both read `RECORDINGS_DIR` from `.env`. Recordings stay outside the repo.
 1. **Intake.** Google Drive link (main path) or upload (≤ 200 MB). Drive files are checked first
    (restricted, missing, over 1 GB) and then streamed to disk with gdown.
 2. **Prepare.** One ffmpeg pass writes mono 16 kHz AAC at 32 kbps (~13 MB per hour), measures EBU R128
-   loudness and feeds the recording-quality check; one still per minute (768 px) is taken in parallel.
+   loudness and feeds the recording-quality check. In parallel, one still per minute (768 px) is taken
+   from the first keyframe of each minute, labelled with its real time.
    The video is deleted straight after.
 3. **Observer** (`prompts/observer.md`, Gemini, audio + stills). 10-minute chunks with 30 s overlap, 4 in parallel.
    Each chunk returns a JSON log of timestamped events, every student turn, a minute grid and frame notes.

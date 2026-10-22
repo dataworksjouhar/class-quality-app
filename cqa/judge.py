@@ -31,6 +31,7 @@ AREA_EVENTS = {
           "teacher_demo", "explanation"},
 }
 WATCH_MIN_S, WATCH_MAX_S = 60, 300
+JUDGE_TIMEOUT_S = 360  # Judge calls take 50-190 s with thinking "high"; the 240 s default was too tight (D24)
 
 
 def prompt_version() -> str:
@@ -93,7 +94,7 @@ def run(judge_input: dict, duration_s: float, thinking_level: str = "high") -> t
     stats = {"seconds": 0.0, "cost_usd": 0.0, "input_tokens": 0, "output_tokens": 0, "thought_tokens": 0, "attempts": 0,
              "api_errors": 0, "calls": []}
     for _ in range(2):
-        r = gemini.interact(system_prompt(), parts, schema(), thinking_level=thinking_level)
+        r = gemini.interact(system_prompt(), parts, schema(), thinking_level=thinking_level, timeout_s=JUDGE_TIMEOUT_S)
         for k, v in (("seconds", r.seconds), ("cost_usd", r.cost_usd), ("input_tokens", r.input_tokens),
                      ("output_tokens", r.output_tokens), ("thought_tokens", r.thought_tokens), ("attempts", r.attempts),
                      ("api_errors", r.api_errors)):
