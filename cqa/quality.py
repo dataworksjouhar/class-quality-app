@@ -57,6 +57,8 @@ class QualityReport:
     minute_db: np.ndarray  # mean level per minute, dBFS
     minute_clipped: np.ndarray  # clipped seconds per minute
     unreliable_spans: list[tuple[float, float]]  # where the Observer/Judge should not trust the audio
+    absent_spans: list[tuple[float, float]] = field(default_factory=list)  # no audio at all (after the lead-in)
+    dense_clip_spans: list[tuple[float, float]] = field(default_factory=list)  # minutes with dense clipping
 
     @property
     def ok(self) -> bool:
@@ -145,4 +147,5 @@ def assess(scan: AudioScan) -> QualityReport:
         "absent_audio_min": round(absent_min, 1),
     }
     unreliable = merge(clip_spans + gaps + absent_late, gap=5)
-    return QualityReport(findings, metrics, minute_db, minute_clip, unreliable)
+    dense = [(m * 60.0, m * 60.0 + 60) for m in np.flatnonzero(minute_clip >= config.CLIP_DENSE_MINUTE)]
+    return QualityReport(findings, metrics, minute_db, minute_clip, unreliable, absent_late, dense)

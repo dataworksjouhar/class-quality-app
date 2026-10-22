@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "properties": {
+    "areas": {
+      "type": "array",
+      "description": "Exactly five entries, A to E, in order.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "area": { "type": "string", "enum": ["A", "B", "C", "D", "E"] },
+          "evidence_for": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Event IDs (E###) or metric names supporting a higher score"
+          },
+          "evidence_against": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Event IDs (E###) or metric names supporting a lower score"
+          },
+          "rationale": { "type": "string", "description": "At most 40 words. Why this anchor fits the evidence." },
+          "score": { "type": "integer", "minimum": 1, "maximum": 4 },
+          "low_evidence": { "type": "boolean" },
+          "not_applicable": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["new_joiner", "homework"] },
+            "description": "Items skipped because they do not apply"
+          }
+        },
+        "required": ["area", "evidence_for", "evidence_against", "rationale", "score", "low_evidence", "not_applicable"]
+      }
+    },
+    "summary": { "type": "string", "description": "One sentence, plain English, no scores" },
+    "strengths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "t": { "type": "string", "description": "MM:SS or H:MM:SS, class time" },
+          "evidence": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["text", "t", "evidence"]
+      }
+    },
+    "improvements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "t": { "type": "string", "description": "MM:SS or H:MM:SS, class time" },
+          "evidence": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["text", "t", "evidence"]
+      }
+    },
+    "watch_minutes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "start": { "type": "string", "description": "MM:SS or H:MM:SS, class time" },
+          "end": { "type": "string", "description": "MM:SS or H:MM:SS, class time" },
+          "reason": { "type": "string" },
+          "evidence": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["start", "end", "reason", "evidence"]
+      }
+    }
+  },
+  "required": ["areas", "summary", "strengths", "improvements", "watch_minutes"]
+}

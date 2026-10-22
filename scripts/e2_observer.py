@@ -65,8 +65,7 @@ def run(args) -> None:
         payload_mb = sum(len(p.get("data", "")) for p in observer.build_parts(audio, ch, frames)) / 1e6
     leaks_before, redactions = {}, {}
     if res.data:
-        names = [r["name_heard"] for r in res.data["roster"] if r["name_heard"].strip()] + vtt_labels(vtt_path)
-        leaks_before = dict(privacy.leak_test(res.data, names))
+        leaks_before = dict(privacy.leak_test(res.data, privacy.heard_names(res.data), vtt_labels(vtt_path)))
         redactions = observer.redact(res.data, vtt_labels(vtt_path))
     rec = {
         "code": args.code, "prompt_version": observer.prompt_version(), "chunk": ch.i, "n_chunks": ch.n, "core": ch.core, "clip": ch.clip,
@@ -193,8 +192,8 @@ def check(args) -> None:
               f"VTT non-teacher speakers in clip: {len(vtt_window)} (whole recording: {len(words) - 1})")
 
         # --- leak test: heard names + VTT labels, outside name_heard
-        names = [r["name_heard"] for r in log["roster"] if r["name_heard"].strip()] + list(words)
-        after = privacy.leak_test(log, names)
+        names = privacy.heard_names(log) + list(words)
+        after = privacy.leak_test(log, privacy.heard_names(log), list(words))
         before = rec.get("leaks_before_redaction")
         print(f"leak test: {len(privacy.tokens(names))} name tokens | before redaction "
               f"{'not recorded (v0.1 run)' if before is None else (before or 'none')} | redactions "

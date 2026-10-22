@@ -1,6 +1,7 @@
-# Observer prompt — v0.2
+# Observer prompt — v0.3
 
 v0.2 (after E2, D16): adds the STUDENT TURNS list, and asks for IDs in place of names inside quotes. Names are also redacted in code (merge rule 4).
+v0.3 (D17): each student turn also has a subtype (answer, question, comment, move_call).
 
 Three parts: the **system prompt** (sent as-is), the **per-chunk message** (filled in by code), and **merge rules** (for the code, never sent to the model). The output schema is in `schemas/observer.schema.json`.
 
@@ -78,6 +79,7 @@ Other
 
 STUDENT TURNS — one row for EVERY turn by anyone other than the teacher or media
 - t: clip time when the turn starts; speaker: roster ID (S#, P#, U#)
+- subtype: answer (to a question), question, comment, or move_call (names or dictates a move)
 - A turn is any stretch of speech by one person, even a single word ("yes", "e4", "sir"). Log every one, including short and overlapping turns. Do not merge several turns into one row.
 - This list must be complete, even in busy stretches. `student_utterance` events are still logged for turns with content worth describing; the two lists overlap.
 

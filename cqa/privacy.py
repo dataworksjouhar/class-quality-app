@@ -9,12 +9,17 @@ import difflib
 import re
 from collections import Counter
 
-# Words in Zoom display names that are not personal names.
+# Words in Zoom display names that are never personal names (devices, roles, Zoom system labels).
 NOT_NAMES = set("""iphone ipad android samsung galaxy phone laptop user zoom guest mobile teacher coach sir mam maam
 miss mrs the and family home desktop redmi oppo vivo realme oneplus nokia moto lenovo dell asus acer mac
-macbook chess eight times king queen rook bishop knight pawn board class student parent mom dad amma appa
+macbook chess eight times board class student parent mom dad amma appa
 tab tablet pro max note mini plus lite
 shared audio screen sound computer recording host""".split())  # Zoom system labels, e.g. "Shared Audio"
+# Chess words in English, Hindi, Malayalam and Tamil. Some are also common names (Raja, Rani). They are never
+# fuzzy-matched, but if someone in the class IS called that, the word is redacted everywhere: privacy wins (D17).
+CHESS_WORDS = set("""king queen rook bishop knight pawn check mate castle
+raja rani mantri wazir vazir ghoda ghora oont unt hathi haathi pyada pyaada sipahi
+aana aane kuthira theru manthri kaalal arasan arasi yaanai kudhirai sippai""".split())
 FUZZY_MIN_LEN = 5
 FUZZY_RATIO = 0.88
 WORD = re.compile(r"[A-Za-z]+")
@@ -28,22 +33,25 @@ def norm(w: str) -> str:
     return re.sub(r"(?<=[^aeiou])h", "", w)  # adhi -> adi
 
 
-def tokens(names) -> set[str]:
+def tokens(names, stoplist: bool = True) -> set[str]:
+    """Name tokens. stoplist=False for heard names: a name the teacher used is always a name."""
     out = set()
     for n in names:
         for w in WORD.findall(n or ""):
-            if len(w) >= 3 and w.lower() not in NOT_NAMES and len(norm(w)) >= 3:
+            if len(w) >= 3 and len(norm(w)) >= 3 and not (stoplist and w.lower() in NOT_NAMES):
                 out.add(norm(w))
     return out
 
 
 def _match(word: str, table: dict[str, str]) -> tuple[str | None, str]:
     """Replacement for one word, and how it matched ('exact', 'fuzzy' or '')."""
-    if len(word) < 3 or word.lower() in NOT_NAMES:
+    if len(word) < 3:
         return None, ""
     n = norm(word)
-    if n in table:
+    if n in table:  # someone is called this, even if it is also a chess word
         return table[n], "exact"
+    if word.lower() in NOT_NAMES or word.lower() in CHESS_WORDS:
+        return None, ""
     if len(n) >= FUZZY_MIN_LEN:
         for t, rep in table.items():
             if len(t) >= FUZZY_MIN_LEN - 1 and difflib.SequenceMatcher(None, n, t).ratio() >= FUZZY_RATIO:
@@ -55,7 +63,7 @@ def name_table(roster: list[dict], vtt_labels=()) -> dict[str, str]:
     """normalised name token -> replacement. A heard name maps to its roster ID; a VTT-only name to [name]."""
     table = {t: "[name]" for t in tokens(vtt_labels)}
     for r in roster:
-        for t in tokens([r.get("name_heard", "")]):
+        for t in tokens([r.get("name_heard", "")], stoplist=False):
             table[t] = f"[{r['id']}]"
     return table
 
@@ -85,9 +93,9 @@ def redact(log: dict, vtt_labels=()) -> Counter:
     return counts
 
 
-def leak_test(log: dict, names) -> Counter:
+def leak_test(log: dict, heard=(), vtt_labels=()) -> Counter:
     """Count remaining name hits: the redaction matcher, plus a substring scan for names of 5+ letters."""
-    table = {t: "x" for t in tokens(names)}
+    table = {t: "x" for t in tokens(vtt_labels) | tokens(heard, stoplist=False)}
     long_names = [t for t in table if len(t) >= FUZZY_MIN_LEN]
     hits: Counter = Counter()
     for where, item, k in _fields(log):
@@ -96,7 +104,17 @@ def leak_test(log: dict, names) -> Counter:
             _, how = _match(w, table)
             if how:
                 hits[f"{where}:{how}"] += 1
-        squashed = norm(text)
-        hits[f"{where}:substring"] += sum(squashed.count(t) for t in long_names) - sum(
-            1 for w in WORD.findall(text) if norm(w) in long_names)
+        # names glued inside one word ("AadhiKumar"); never across words, which only finds letter accidents
+        hits[f"{where}:substring"] += sum(1 for w in WORD.findall(text) for t in long_names
+                                          if t in norm(w) and norm(w) != t)
     return Counter({k: v for k, v in hits.items() if v > 0})
+
+
+def heard_names(log: dict) -> list[str]:
+    return [r["name_heard"] for r in log.get("roster", []) if r.get("name_heard", "").strip()]
+
+
+def leak_test_text(text: str, heard=(), vtt_labels=()) -> int:
+    """Name hits in any text (the Judge input, the report): same matcher plus the substring scan."""
+    log = {"events": [{"detail": text, "quote_en": ""}]}
+    return sum(leak_test(log, heard, vtt_labels).values())

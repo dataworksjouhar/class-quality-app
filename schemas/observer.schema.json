@@ -60,11 +60,21 @@
           "speaker": {
             "type": "string",
             "description": "Roster ID: S#, P# or U#"
+          },
+          "subtype": {
+            "type": "string",
+            "enum": [
+              "answer",
+              "question",
+              "comment",
+              "move_call"
+            ]
           }
         },
         "required": [
           "t",
-          "speaker"
+          "speaker",
+          "subtype"
         ]
       }
     },
