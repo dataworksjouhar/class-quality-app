@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,17 +24,27 @@ PRICE_IN = 0.75
 PRICE_OUT = 3.75
 MAX_INLINE_BYTES = 18 * 1024 * 1024  # keep the whole request under the ~20 MB inline limit
 CALL_TIMEOUT_S = 240  # slowest normal call in the evaluation took ~125 s; some calls hang (D21)
-MAX_API_ERRORS = 2  # per interact(): a hung or failed call is retried once, then the error is raised
+# Retries per interact() (D23). A hung call (timeout) is retried once. Connection errors, rate limits and server
+# errors are usually short blips, so they get up to 3 retries with growing waits. Worst case stays bounded.
+MAX_TIMEOUT_RETRIES = 1
+TRANSIENT_BACKOFF_S = (5, 15, 30)
 
 if google.genai.__version__ != SDK_VERSION:
     raise RuntimeError(f"google-genai {google.genai.__version__} installed; this wrapper is pinned to {SDK_VERSION}.")
 
 _client: genai.Client | None = None
+_client_lock = threading.Lock()
 
 
 def client() -> genai.Client:
+    """One shared client, created once under a lock. Without the lock, parallel chunk threads each created a client;
+    the spare ones were garbage-collected and the SDK closed a connection still in use ("client has been closed"), D23."""
     global _client
-    if _client is None:
+    if _client is not None:
+        return _client
+    with _client_lock:
+        if _client is not None:
+            return _client
         key = os.environ.get("GEMINI_API_KEY")
         if not key:
             try:
@@ -75,6 +86,7 @@ class Result:
     input_by_modality: dict = field(default_factory=dict)
     attempts: int = 1
     api_errors: int = 0
+    calls: list = field(default_factory=list)  # one entry per HTTP attempt: seconds and outcome (never content)
 
     @property
     def cost_usd(self) -> float:
@@ -93,7 +105,7 @@ def interact(system: str, parts: list[dict], schema: dict, *, thinking_level: st
     if seed is not None:
         gen["seed"] = seed
     total = Result(None, "", "", 0.0, attempts=0)
-    parses = 0
+    parses = timeouts = transient = 0
     while parses < 2:
         t0 = time.time()
         try:
@@ -106,15 +118,26 @@ def interact(system: str, parts: list[dict], schema: dict, *, thinking_level: st
                 generation_config=gen,
                 timeout=timeout_s,
             )
-        except Exception:
+        except Exception as e:
             total.seconds += time.time() - t0
             total.api_errors += 1
-            if total.api_errors >= MAX_API_ERRORS:
+            code = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
+            total.calls.append({"s": round(time.time() - t0, 1), "outcome": f"{type(e).__name__}{f' {code}' if code else ''}"})
+            if code is not None and 400 <= int(code) < 500 and int(code) not in (408, 429):
+                raise  # a bad request will not get better by retrying
+            if "Timeout" in type(e).__name__:
+                timeouts += 1
+                if timeouts > MAX_TIMEOUT_RETRIES:
+                    raise
+                continue
+            transient += 1
+            if transient > len(TRANSIENT_BACKOFF_S):
                 raise
-            time.sleep(5)
+            time.sleep(TRANSIENT_BACKOFF_S[transient - 1])
             continue
         parses += 1
         total.seconds += time.time() - t0
+        total.calls.append({"s": round(time.time() - t0, 1), "outcome": "ok"})
         total.attempts += 1
         u = r.usage
         if u is not None:

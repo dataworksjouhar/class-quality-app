@@ -90,14 +90,15 @@ def run(src: Path, work: Path, vtt_text: str | None = None, progress: Progress |
                 r = fut.result()
                 obs_cost += r.cost_usd
                 obs_stats.append({"chunk": ch.i, "seconds": round(r.seconds), "cost_usd": round(r.cost_usd, 4),
-                                  "api_errors": r.api_errors})
+                                  "api_errors": r.api_errors, "calls": r.calls})
                 if r.data:
                     heard.update(privacy.heard_names(r.data))
                     results[ch.i] = merge.ChunkResult(ch, r.data)
                 else:
                     results[ch.i] = merge.ChunkResult(ch, None, "failed")
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 results[ch.i] = merge.ChunkResult(ch, None, "failed")
+                obs_stats.append({"chunk": ch.i, "failed": type(e).__name__})
             say("observe", done / len(chunks), f"Observed {done} of {len(chunks)} chunks")
     timings["observe_s"] = round(time.time() - t1)
     # redact only now, with the names heard in ANY chunk: a name can be spoken in one chunk and only reach the
@@ -137,7 +138,7 @@ def run(src: Path, work: Path, vtt_text: str | None = None, progress: Progress |
         "judge_prompt": judge.prompt_version(), "chunks": len(chunks), "chunks_failed": merged.chunks_failed,
         "observer_cost_usd": round(obs_cost, 4), "judge_cost_usd": round(jstats["cost_usd"], 4),
         "total_cost_usd": round(obs_cost + jstats["cost_usd"], 4), "judge_checks_removed": jstats["removed"],
-        "judge_input_events": len(jin["events"]), "judge_api_errors": jstats["api_errors"],
+        "judge_input_events": len(jin["events"]), "judge_api_errors": jstats["api_errors"], "judge_calls": jstats["calls"],
         "timings_s": {**timings, "total_s": round(time.time() - t0)}, "observer_chunks": sorted(obs_stats, key=lambda x: x["chunk"]),
         "transcript_used_for_privacy": bool(labels),
     }
