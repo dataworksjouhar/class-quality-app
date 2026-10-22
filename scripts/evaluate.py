@@ -2,7 +2,9 @@
 
 Usage: python scripts/evaluate.py [--parallel 3] [--only B472 B558 ...]
 Each run works on a copy of the video (the pipeline deletes its input). Reports (name-free, leak-tested) go to
-data/reports/eval/<code>.json and the table to data/reports/eval/table.md, all gitignored.
+data/reports/eval/<code>.json, each Judge input (name-free: saved only after it passes the leak test) to
+data/reports/eval/<code>.judge_input.json for Judge-only re-runs (D25), and the table to
+data/reports/eval/table.md, all gitignored.
 """
 import argparse
 import json
@@ -29,6 +31,7 @@ ORGANISER = {"excellent": "Excellent", "good": "Good", "average": "Average", "we
              "quality issue": "(quality issue)", "demo": "(demo)"}
 ORDER = {"Excellent": 0, "Good": 1, "Average": 2, "Poor (Weak)": 3, "(quality issue)": 4, "(demo)": 5}
 B435_SUFFIX = {"good": "-Jul", "average": "-Aug"}  # rubric.md: B435 appears twice
+JUDGE_INPUT_SUFFIX = ".judge_input.json"
 
 
 def recordings() -> list[dict]:
@@ -55,7 +58,12 @@ def run_one(rec: dict) -> dict:
         shutil.copyfile(rec["video"], src)
         vtt_text = rec["vtt"].read_text(encoding="utf-8", errors="replace") if rec["vtt"] else None
         t0 = time.time()
-        report = pipeline.run(src, job, vtt_text)
+        judge_file = OUT / f"{rec['code']}{JUDGE_INPUT_SUFFIX}"
+
+        def save_judge_input(payload: dict) -> None:
+            judge_file.write_text(json.dumps(payload, indent=1, default=str), encoding="utf-8")
+
+        report = pipeline.run(src, job, vtt_text, judge_input_sink=save_judge_input)
         report["eval"] = {"code": rec["code"], "organiser": rec["organiser"], "wall_s": round(time.time() - t0)}
     (OUT / f"{rec['code']}.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
     return report
@@ -100,6 +108,8 @@ def main() -> None:
             print(f"[{time.time() - t0:5.0f}s] {rec['code']}: {rows[rec['code']].get('app')}", flush=True)
     # the table covers every saved report, including runs from earlier invocations
     for f in OUT.glob("*.json"):
+        if f.name.endswith(JUDGE_INPUT_SUFFIX):
+            continue
         r = json.loads(f.read_text(encoding="utf-8"))
         if r["eval"]["code"] not in rows or rows[r["eval"]["code"]]["app"].startswith("FAILED"):
             rows[r["eval"]["code"]] = row(r["eval"], r)

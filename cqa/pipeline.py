@@ -21,6 +21,7 @@ from .quality import ts
 
 PARALLEL_CHUNKS = 4
 Progress = Callable[[str, float, str], None]  # (step, fraction 0-1, message)
+JudgeInputSink = Callable[[dict], None]
 
 
 class PrivacyCheckFailed(RuntimeError):
@@ -71,7 +72,9 @@ def _observe_chunk(audio: Path, ch: observer.Chunk, frames, work: Path) -> gemin
 
 
 def run(src: Path, work: Path, vtt_text: str | None = None, progress: Progress | None = None,
-        delete_source: bool = True) -> dict:
+        delete_source: bool = True, judge_input_sink: JudgeInputSink | None = None) -> dict:
+    """judge_input_sink (evaluation only, D25): called with the Judge input after it has passed the leak test,
+    plus what a Judge-only re-run needs to recompute the label (forced low_evidence, area F, metrics)."""
     say = progress or (lambda *a: None)
     t0 = time.time()
     timings = {}
@@ -134,6 +137,11 @@ def run(src: Path, work: Path, vtt_text: str | None = None, progress: Progress |
     unusable, _ = metrics.audio_minutes(merged, q)
     jin = judge.build_input(merged, met, jm, unusable, vtt_used=bool(labels))
     _gate("Judge input", jin, heard, labels)
+    if judge_input_sink is not None:
+        judge_input_sink({"judge_input": jin, "forced_low_evidence": forced, "area_f": metrics.area_f(merged, q),
+                          "metrics": met, "duration_s": merged.duration_s,
+                          "versions": {"observer_prompt": observer.prompt_version(), "judge_prompt": judge.prompt_version(),
+                                       "model": gemini.MODEL}})
 
     # 4. Judge scores A-E; F, the label rule and confidence are code
     t2 = time.time()
