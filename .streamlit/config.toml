@@ -1,0 +1,6 @@
+[server]
+# Uploads are held in memory by Streamlit, so keep them small (D7). Full classes go through a Drive link.
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false

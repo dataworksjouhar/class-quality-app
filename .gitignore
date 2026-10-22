@@ -1,0 +1,30 @@
+# secrets
+.env
+.streamlit/secrets.toml
+
+# data never goes in the repo: recordings, transcripts, outputs
+data/
+tmp/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.m4v
+*.m4a
+*.aac
+*.mp3
+*.wav
+*.ogg
+*.opus
+*.flac
+*.media
+*.vtt
+*.srt
+*.jpg
+*.jpeg
+*.png
+*.npz
+*.pdf
+
+__pycache__/
+.venv/
