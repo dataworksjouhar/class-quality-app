@@ -3,7 +3,7 @@
 Takes a recording of an online children's class and returns a label (Poor / Average / Good / Excellent),
 timestamped evidence, and the minutes a QA reviewer should watch first.
 
-**Status: full pipeline works end to end; evaluated on all 12 recordings (below).** A 46-minute class takes 4-5 min and about $0.30.
+**Status: complete and frozen.** Evaluated on all 12 recordings (below). A run takes 6-8 minutes and costs about $0.30-0.60.
 See `CLAUDE.md` for the plan and `DECISIONS.md` for every change to it.
 
 ## Using the app
@@ -62,6 +62,20 @@ Tests: `python -m pytest tests` (label rule against the rubric's sanity table, a
 
 ## Evaluation (12 recordings, prompts frozen: Observer v0.3, Judge v0.1)
 
+**Result on the 8 labelled recordings, against trivial baselines**
+
+| | exact | within one level | mean levels off |
+|---|---|---|---|
+| This app | 2 / 8 | 7 / 8 | 0.88 |
+| Always "Good" | 2 / 8 | 6 / 8 | 1.00 |
+| Always "Average" | 2 / 8 | 6 / 8 | 1.00 |
+
+The app is only slightly better than answering "Good" every time. It never gave Excellent or Poor: both Excellent
+classes came out Good (M 2.78 and 3.00), and both Poor classes came out Average or Good (M 2.44 and 2.78).
+The scale is compressed toward the middle.
+
+**All 12 recordings**
+
 | code | organiser | app | M | A | B | C | D | E | F | confidence | min | time | cost |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | B472 | Excellent | Good | 2.78 | 3 | 2 | 3 | 3 | 3 | 3 | Medium | 56 | 18:25 | $0.39 |
@@ -77,13 +91,57 @@ Tests: `python -m pytest tests` (label rule against the rubric's sanity table, a
 | EN-demo | (demo) | Good | 3.00 | 3 | 3 | 3 | 2 | 4 | 3 | High | 44 | 9:02 | $0.40 |
 | ML-demo | (demo) | Good | 3.11 | 4 | 3 | 3 | 3 | 3 | 2 | Medium | 52 | 6:36 | $0.40 |
 
-`*` = low evidence. Time is wall time per recording, mostly with 3 running at once on one laptop (B491 and B472 include hung API calls before the 240 s timeout, D21).
+Time is wall time per recording during the evaluation, mostly with 3 recordings running at once on one laptop;
+B491 and B472 also include API calls that hung before the timeout was lowered (DECISIONS D21, D23). Run alone on the
+laptop after the fixes, a 54-minute class took 7 min 20 s.
 
-Labelled recordings: **2 of 8 exact, 7 of 8 within one level.** No recording was labelled Excellent or Poor:
-the scale is compressed toward the middle (see tuning notes T1-T4 in DECISIONS.md). The quality flag fires on
-B441 but not on B392. The English and Malayalam demos get the same label (Good, M 3.00 and 3.11).
-B558 gave the same result in three separate runs. Total cost $4.61. **Twelve samples prove little**, and the
-rubric anchors were written from feedback on these same recordings, so these numbers are optimistic.
+**Other checks**
+
+- **Consistency.** B558: same label and scores in three separate runs. B552: Good, M 3.11 in the evaluation and
+  again in an online test from a phone via a Drive link.
+- **Language fairness (E4).** English demo Good (M 3.00), Malayalam demo Good (M 3.11). A native Malayalam speaker
+  checked more than 5 timestamped evidence lines in the Malayalam report against the video: all matched.
+- **Recording quality.** The flag fires on B441 (audio keeps cutting out) but not on B392 (quiet teacher voice).
+- **Privacy.** No names in any of the 12 reports or in the online test (independent check against every speaker
+  label in the 12 transcripts).
+- **Online test.** Streamlit Community Cloud, from a phone, Drive link (B552): worked end to end in about 6-8 minutes,
+  with the same label and M as in the evaluation; the report had timestamps, minutes to watch and no names.
+
+**Tested and rejected**
+
+- **Reweighting the rubric areas** (B weight 2 -> 1, D weight 1 -> 2), computed offline on the 12 saved results with
+  no new runs: exact matches stay at 2 / 8; within one level goes from 7 / 8 to 8 / 8, because B558 moves from Good
+  (M 2.78) to Average (M 2.67). Also capping area A at 2 for B558 (no new-joiner introductions, tuning note T1) gives
+  M 2.44 with the new weights or 2.56 with the current ones: still Average, because the Poor rule needs A = 1.
+  **Rejected:** it adds no exact matches, and it would be fitted to the same 12 recordings it is tested on.
+- **No tuning round.** The plan allowed one round of prompt tuning after the full evaluation. It needs the Judge
+  inputs, which were not saved for the evaluated run (DECISIONS D25), so the prompts stay frozen as evaluated.
+  Candidate changes are recorded, not applied (DECISIONS, tuning notes T1-T4).
+
+**Twelve samples prove little.** The rubric anchors were written from the organiser's feedback on these same
+recordings, so even these numbers are optimistic. The hidden test recording is the only clean test.
+
+## Limitations
+
+- **Accuracy.** Barely above the "always Good" baseline; extremes are never used (see above). Treat the label as a
+  starting point and the timestamped evidence and "watch these minutes" as the useful part.
+- **Forced improvements.** The Judge always lists improvements, even for a strong class, and the app does not know
+  the class type: it suggested homework for a demo class, where none is expected.
+- **Opening (area A).** A greeting earns credit even when new joiners are not invited to introduce themselves, the
+  organiser's actual complaint in B558 (tuning note T1).
+- **Pronouns.** Evidence lines refer to children as he or she (1-17 times per report): not names, but they reveal
+  gender (T2).
+- **Audio problems the app cannot hear.** The Observer rated almost every minute "clear", including the quality-issue
+  recordings. Only ffmpeg's no-audio check found bad minutes. The voice crackle in B441 (~1:03:00) and the quiet
+  teacher voice in B392 are not detected.
+- **Area F counts missing audio** as a setup problem, which the rubric reserves for confidence (T3). This dropped
+  B435-Jul from Good to Average.
+- **Names.** Heard names and transcript labels are redacted, and a leak test blocks any report that still contains
+  one. Without an uploaded transcript, the test only knows the names the Observer heard.
+- **Run time and phones.** A run takes 6-8 minutes and must stay connected: if a phone sleeps or the page reloads
+  mid-run, the result is lost. The page says so; surviving a reload is not built.
+- **Language.** Malayalam was checked by a native speaker on one demo. Tamil switching (B392) was not checked line
+  by line.
 
 ## Data handling
 
@@ -92,6 +150,10 @@ rubric anchors were written from feedback on these same recordings, so these num
 - The finished report (JSON only: no audio, stills, logs or names) is kept in the server's temp folder for 24 hours
   under a random run ID in the page URL, so a reload brings it back. Then it is deleted.
 - gdown runs with `--no-cookies`, so downloads never use anyone's Google account.
+- Audio and low-resolution stills go to the Gemini API (paid tier: not used for training), inline only, with
+  `store=false` on every call. Google may still keep requests for up to 55 days for abuse monitoring. The app host
+  (Streamlit Community Cloud) also processes the files while a run is going.
+- No student names in any output: children are S1, S2…, and names are redacted before anything is stored.
 
 ## Recording-quality check: what it catches (E5, 12 recordings)
 
